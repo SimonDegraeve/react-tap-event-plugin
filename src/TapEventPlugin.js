@@ -50,6 +50,9 @@ var tapMoveThreshold = 10;
 var ignoreMouseThreshold = 750;
 var startCoords = {x: null, y: null};
 var lastTouchEvent = null;
+var scrollParents = [];
+var scrollParentPos = [];
+var scrollPos = {top: 0, left: 0};
 
 var Axis = {
   x: {page: 'pageX', client: 'clientX', envScroll: 'currentPageScrollLeft'},
@@ -73,6 +76,21 @@ function getDistance(coords, nativeEvent) {
     Math.pow(pageX - coords.x, 2) + Math.pow(pageY - coords.y, 2),
     0.5
   );
+}
+
+function initScrollDetection(node) {
+  scrollPos = {top: 0, left: 0};
+  scrollParents = [];
+  scrollParentPos = [];
+  while (node) {
+    if (node.scrollHeight > node.offsetHeight || node.scrollWidth > node.offsetWidth) {
+      scrollParents.push(node);
+      scrollParentPos.push(node.scrollTop + node.scrollLeft);
+      scrollPos.top += node.scrollTop;
+      scrollPos.left += node.scrollLeft;
+    }
+    node = node.parentNode;
+  }
 }
 
 var touchEvents = [
@@ -146,12 +164,20 @@ var TapEventPlugin = {
     var event = null;
     var distance = getDistance(startCoords, nativeEvent);
     if (isEndish(topLevelType) && distance < tapMoveThreshold) {
-      event = SyntheticUIEvent.getPooled(
-        eventTypes.touchTap,
-        topLevelTargetID,
-        nativeEvent,
-        nativeEventTarget
-      );
+      var finalParentScrollPos = scrollParents.map(function (node) {
+        return node.scrollTop + node.scrollLeft;
+      });
+      var stoppedMomentumScroll = scrollParentPos.some(function (end, i) {
+        return end !== finalParentScrollPos[i];
+      });
+      if (!stoppedMomentumScroll) {
+        event = SyntheticUIEvent.getPooled(
+          eventTypes.touchTap,
+          topLevelTargetID,
+          nativeEvent,
+          nativeEventTarget
+        );
+      }
     }
     if (isStartish(topLevelType)) {
       startCoords.x = getAxisCoordOfEvent(Axis.x, nativeEvent);
